@@ -25,7 +25,7 @@ The goal of this project is to apply unsupervised learning methods to analyze FI
 4. **Application of Unsupervised Learning Techniques**:
    - **Principal Component Analysis (PCA)**: Reduce the dimensionality of the data while preserving significant variance to visualize and interpret underlying patterns.
    - **Factor Analysis (FA)**: Uncover latent factors that explain correlations among player attributes to understand performance dimensions.
-   - **Clustering**: Apply algorithms such as K-means or hierarchical clustering to group players based on statistical profiles and identify distinct performance patterns.
+   - **Clustering**: Apply clustering algorithms to group players based on statistical profiles and identify distinct performance patterns.
   
 5. **Analysis and Interpretation**:
    - Evaluate and interpret the results from unsupervised learning techniques to understand relationships and patterns in player performance. Discuss the significance of clusters and principal components. All these insights will be commented on in the project's `.rmd` or `.html`file.
