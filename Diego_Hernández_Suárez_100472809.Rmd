@@ -1,0 +1,1287 @@
+---
+title: "Study of a Data Set applying Unsupervised Learning tools"
+author: "Diego Hernández Suárez (100472809)"
+date: '03/11/2022'
+course: "Statistical Learning, Bachelor in Data Science and Engineering"
+output:
+  html_document: 
+    css: my-theme.css
+    theme: cerulean
+    highlight: tango
+    number_sections: no
+    toc: no
+    toc_depth: 1
+  pdf_document:
+    css: my-theme.css
+    theme: cerulean
+    highlight: tango
+    number_sections: yes
+    toc: yes
+    toc_depth: 1
+editor_options:
+  chunk_output_type: console
+---
+
+
+```{r global_options, include=T, echo = F}
+knitr::opts_chunk$set(echo = T, warning=FALSE, message=FALSE)
+```
+
+# Introduction to the work
+
+This homework is based on selecting one open data set (that can be obtained from different sources) where we are going to clean, visualize and finally apply different unsupervised learning tools in order to process and understand in a deep way the data contained in the data set. During this work we will apply unsupervised learning tools such as the PCA, FA or Clustering, in where we will see their impact and how they work.
+
+# Selected data set
+
+I obtained my data set from KAGGLE at the following URL: 
+https://www.kaggle.com/datasets/bryanb/fifa-player-stats-database?resource=download&select=FIFA23_official_data.csv
+
+I am going to study a data set about the FIFA 23 players and its characteristics in the career mode, where we are going to  compare them and reach different conclusions. I like this data set  because I am a fan of the FIFA video games and I consider it quite interesting to be able to use unsupervised learning tools in order to understand and analyze better the data inside this data set.
+
+I consider this data set is quite good because it has 17660 rows and 29 columns, so it is a big data set where I can modify it and work with it in different ways, and also are different types of data (characters, integers, doubles, factors or logicals) so I can use different approaches. Furthermore, it has NA values and NaN values to clean the data set properly.
+
+It is important to mention this data is obtained from the history mode (also known as career mode inside the video game), where the prices are similar but not exactly the same as the real life.
+
+
+## Goals & questions
+
+Some questions that I would like to answer using this data set are the following:
+
+- What differences the best and the worst footballers in FIFA 23?
+- How important are certain characteristics in a footballer in order to be good?
+
+# Data Preprocessing
+
+We load some libraries (later I will load another ones, but for the data pre processing is enough)
+```{r}
+library(tidyverse)
+library(plyr)
+library(ggplot2)
+```
+
+Remove the previous records and load the data set
+
+```{r}
+rm(list=ls())
+dataset <- read.csv('FIFA23_official_data.csv')
+```
+
+We use the functions View(), summary() and str() to see visually the data set and look at his information
+
+```{r}
+View(dataset)
+summary(dataset)
+str(dataset)
+```
+
+If there are less than 5% of the total data set, we can omit all that missing data. By using the summary() function we can see the 35 NAs are in the kit number, I decided to remove all that rows because we still have a huge data set, so I can avoid missing values future problems and loosing that rows are not a problem.
+
+However, first I will plot a  histogram and a barplot in order to see visually where are the NAs and their quantity
+
+```{r}
+hist(rowMeans(is.na(dataset)))
+barplot(colMeans(is.na(dataset)), las=2)
+```
+
+We see how many NA are in the data set by using the sum() and is.na() functions
+# so we are going to use a if statement to see if there are NAs in the data set
+
+
+```{r}
+if (sum(is.na(dataset)) > 0){
+  # Now, to be sure that this NAs values represent less than the 5% of the total data set
+  # we create a if statement to verify this condition
+  if (sum(is.na(dataset)/nrow(dataset)) < 0.05){
+  # We change the data set to the same data set without NAs using the na.omit function
+  # in the case there are NAs values
+    dataset <- na.omit(dataset)
+  }
+}
+```
+
+As we can see, the data set has changed because there were NAs values.
+
+Let's see if there are rows duplicated and remove them in the case there are, we are going to use the unique() function and use it just it case the number of rows of the data set with unique rows are not equal to the original data set. 
+In this way it is not necessary to change again the whole data set, just in the case it is essential because there are duplicated rows.
+
+```{r}
+if (nrow(dataset) != nrow(unique(dataset))){
+  dataset = unique(dataset)
+}
+```
+
+As we can see, the condition for the if statement is not fulfilled so we can affirm there are any duplicated row
+
+Now I am going to start deleting the columns in which I am not interested in or I consider there is nothing enough important to study them.
+The columns that consist in URLs (such as flags or pictures), codes (such as IDs)  or columns that contains nans can be deleted. Also I am going to delete variables that I am not interested in studying them or we will not reach any interesting conclusions.
+
+```{r}
+dataset$Flag = NULL 
+dataset$Photo = NULL
+dataset$Club.Logo = NULL
+dataset$Loaned.From = NULL
+dataset$Position = NULL
+dataset$Best.Overall.Rating = NULL
+dataset$Kit.Number = NULL
+dataset$Body.Type = NULL
+dataset$Special = NULL
+dataset$ID = NULL
+dataset$Joined = NULL
+dataset$Contract.Valid.Until = NULL
+```
+
+I am going to modify most of the columns in order to change their classes to the class that I am interested in order to study them properly.
+
+For the Real.Face variable I am going to change the type of variable from character to a logical variable (Boolean).
+
+Because the Real.Face variable is a character variable, I will convert it into boolean by saying that if it is TRUE it means the face of the player is scanned into the video game, and if it is FALSE it means they did not scanned the face of the player into the FIFA 23.
+
+```{r}
+class(dataset$Real.Face) # Character
+```
+
+We cannot just convert the whole variable by using the as.logical() function  because then we will only obtain NAs values
+
+We are going to use a while loop to replace the "Yes" into TRUE and the "No" to FALSE (In other words, into booleans)
+
+```{r}
+i <- 1
+while (i <= nrow(dataset)){
+  if (dataset$Real.Face[i] == "Yes"){
+    # In the case it is "Yes", then it is TRUE the player has his "real" face in the game
+    dataset$Real.Face[i]<- TRUE
+  }
+  else{
+    # If it is not "Yes", it must be "No"
+    dataset$Real.Face[i]<- FALSE
+  }
+  i <- i + 1
+}
+dataset$Real.Face = as.logical(dataset$Real.Face) # We finally set the whole variable as a logical variable
+```
+
+Now we are going to change the values of the columns Value, Wage and Release.Clause in order to work with them, where I will convert them into numeric variables.
+
+Let's see which class are they right now:
+```{r}
+class(dataset$Value) # Character
+class(dataset$Wage) # Character
+class(dataset$Release.Clause) # Character
+```
+
+First of all, I need to delete the strings (the "â,¬" and the "K" or "M") of the variables in order to convert them into numeric variables, in this case, there is a "â,¬" at the beginning and a "M" or "K" at the end, so I am going to use the functions substring() to make shorter the variable, and I am going to start from the forth character of the string to delete the 3 first that are the "â,¬" for the three variables.
+
+```{r}
+dataset$Value <- substring(dataset$Value, 4)
+dataset$Wage <- substring(dataset$Wage, 4)
+dataset$Release.Clause <- substring(dataset$Release.Clause, 4)
+```
+
+For the first loop (focused on the Wage variable, as we already deleted the "â,¬", we need to take into account if the wage is paid in K or in units, so we are going to  go through the different rows to know which ones ends with a K, that rows must be multiplied by 1000 and the K at the end must be deleted. Furthermore, I am going to use the function as.numeric() to make the numeric variables so it will be easier to work with them.
+
+It is important to mention that any player earns more than 999K, so it is not necessary to create a case in which a player earns 1M or more. I will not create a case for a player that earns 1M or more because it will affect the efficiency and will require more computer resources, something that is completely unnecessary.
+Any ways, I added with # what would be the code in the case a players earn 1M or more. I also execute it and there was no difference between my current code or adding that piece of extra code.
+
+```{r}
+i <- 1
+while (i <= nrow(dataset)){
+  if (substring(dataset$Wage[i], nchar(dataset$Wage[i])) == "K"){  
+    # This statement is used to know if the wage is paid in K or in units, 
+    # that we can know this information by looking at the last character of the strings in this variable
+    # we must multiply by 10^3 and also convert it to a numeric variable.
+    dataset$Wage[i] <- 10^3 * as.numeric(substring(dataset$Wage[i], 1, nchar(dataset$Wage[i])-1))
+  }
+  #In the case we wanted to do it for a player that his wage is in millions (M)
+  # we could use the following piece of code. I already use it just to be sure
+  # the result is exactly the same, and it is verified that the data set have the
+  # exactly same changes by using this case or not because any wage is paid in M.
+  
+  #if (substring(dataset$Wage[i], nchar(dataset$Wage[i])) == "M"){
+  #dataset$Wage[i] <- 10^6 * as.numeric(substring(dataset$Wage[i], 1, nchar(dataset$Wage[i])-1))}
+  
+  else{
+    # In the case it does not end with K, we just need to convert the variable into numeric
+    dataset$Wage[i] <- as.numeric(dataset$Wage[i])
+  # We continue the loop
+  i <- i+1
+  }
+}
+# We convert the whole column into a numeric variable
+dataset$Wage = as.numeric(dataset$Wage)
+```
+
+We are going to do a similar process with the other 2 variables
+
+For the Value variable, there are three possible cases, the first is the footballer  costs 1 M or more, in where we need to multiply by 10^6. The second case is the player costs between 1 K and 999 K, in where we need to multiply by 10^3. Finally, the case where the player cost less than 1K, where we do not need to multiply by any number.  
+It is also important to convert all the variables from characters to numeric.
+```{r}
+i <- 1
+while (i <= nrow(dataset)){
+  if (substring(dataset$Value[i], nchar(dataset$Value[i])) == "M"){
+    # In the case the player cost 1M or more
+    dataset$Value[i] <- 10^6 * as.numeric(substring(dataset$Value[i], 1, nchar(dataset$Value[i]) - 1))
+    }
+  if (substring(dataset$Value[i], nchar(dataset$Value[i])) == "K"){
+    # In the case the player cost less than 1M
+    dataset$Value[i] <- 10^3 * as.numeric(substring(dataset$Value[i], 1, nchar(dataset$Value[i]) - 1))
+  }
+  else{
+    # In the case the players cost less than 1K, we just need to convert it to numeric
+    dataset$Value[i] <- as.numeric(dataset$Value[i])
+  }
+  # To continue the loop
+  i <- i + 1
+  }
+
+# We convert the whole variable to numeric
+dataset$Value = as.numeric(dataset$Value)
+```
+
+Let's do the same process for the Release.Clause variable
+
+```{r}
+i <- 1
+while (i <= nrow(dataset)){
+  if (substring(dataset$Release.Clause[i], nchar(dataset$Release.Clause[i])) == "M"){
+    # In the case the release clause cost 1M or more
+    dataset$Release.Clause[i] <- 10^6 * as.numeric(substring(dataset$Release.Clause[i], 1,
+                                                             nchar(dataset$Release.Clause[i]) - 1))
+  }
+  if (substring(dataset$Release.Clause[i], nchar(dataset$Release.Clause[i])) == "K"){
+    # In the case the release clause cost less than 1M
+    dataset$Release.Clause[i] <- 10^3 * as.numeric(substring(dataset$Release.Clause[i], 1,
+                                                             nchar(dataset$Release.Clause[i]) - 1))
+  }
+  else{
+    # In the case the release clause cost less than 1K, we just need to convert it to numeric
+    dataset$Release.Clause[i] <- as.numeric(dataset$Release.Clause[i])
+  }
+  # To continue the loop
+  i <- i + 1
+}
+```
+
+I noticed in this column that some release clauses converted from "nan" to NA, so I will change this NA values to other standard value in order to simplify the huge data set.
+
+I had been thinking about possible solutions, one possible solution was to assign the value infinite (Inf) to all the elements which were NAs, however, after I started the machine learning process, I noticed that it brought a lot of issues and also for the visualization tools process it was quite complex.
+```{r}
+sum(is.na(dataset$Release.Clause)) # == sum(is.na(dataset))
+```
+
+As we can see, there are 1117 NA values, that is approximately  the 6% of the whole data set ([1117/17625] * 100), so it is not recommended to remove all this rows, instead of that, I will change its value to the mean of the column to have a standard and common value to the 1117 rows. In this way the change and impact will be minimized, because it is a 6% (close to 5%) replacing this values using the mean will not have an important impact.
+
+The reason why there is NA in some release clause is because there is no release clause, so if a team wants to buy  the player,it must negotiate with his club first. They cannot pay a certain amount of money in order to purchase the footballer (the value of the release clause)
+
+```{r}
+i <- 1
+while (i <= nrow(dataset)){
+  if (is.na(dataset$Release.Clause[i]) == TRUE){
+    # In the case it is an NA, I will use the mean to assign the mean of the
+    # other values that are not NAs, in that way, I will avoid problems in the future
+    # and maintain my data set clean and unnoisy.
+    dataset$Release.Clause[i] = as.numeric(mean(as.numeric(dataset$Release.Clause), na.rm = TRUE))
+  }
+  i = i + 1
+}
+dataset$Release.Clause = as.numeric(dataset$Release.Clause)
+```
+
+The Age, Overall and Potential should be treated as numeric variables.
+```{r}
+dataset$Age = as.numeric(dataset$Age)
+dataset$Overall = as.numeric(dataset$Overall)
+dataset$Potential = as.numeric(dataset$Potential)
+```
+
+Lets check for other variables
+```{r}
+class(dataset$Weak.Foot) # Numeric, so it is not necessary to change the class of the variable
+class(dataset$Skill.Moves) # Numeric, same as Weak.Foot variable
+```
+
+Convert the char variables to factor variables will be useful for the future
+
+```{r}
+dataset$Nationality = as.factor(dataset$Nationality)
+dataset$Work.Rate = as.factor(dataset$Work.Rate)
+dataset$Preferred.Foot = as.factor(dataset$Preferred.Foot)
+
+# In the case of the international reputation I will consider it as a numeric
+dataset$International.Reputation = as.numeric(dataset$International.Reputation)
+```
+
+For the height variable we are going to convert it to a numeric variable
+```{r}
+i <- 1
+while (i <= nrow(dataset)){
+  # I use the function nchar() and substring() to choose from the first letter
+  # to the ante penultimate letter (to avoid choosing the "cm" part)
+  dataset$Height[i] <- as.numeric(substring(dataset$Height[i], 1, nchar(dataset$Height[i])-2))
+  i = i + 1
+}
+dataset$Height = as.numeric(dataset$Height)
+```
+
+Exactly the same for the weight
+```{r}
+i <- 1
+while (i <= nrow(dataset)){
+  # I use the function nchar() and substring() to choose from the first letter
+  # to the ante penultimate letter (to avoid choosing the "kg" part)
+  dataset$Weight[i] <- as.numeric(substring(dataset$Weight[i], 1, nchar(dataset$Weight[i])-2))
+  i = i + 1
+}
+dataset$Weight = as.numeric(dataset$Weight)
+```
+
+## Outliers
+
+I am going to plot different box plots in order to identify the outliers and after I will decide if it is necessary to delete them or not depending if they make sense inside the data set
+
+As we can see in the following box plots, there is a huge amount of outliers, specially in the Wage, Release.Clause and Value variables, however, it make sense that especifically in those variables there are an important amount of outliers, because there is quite few top professional footballers that earns so much money or have that value in the market. About the rest of the variables (such as height or weight), we can see there exist some outliers but as before, it is normal to see a big difference of height for example between footballers.
+
+```{r}
+ggplot(dataset, aes(y = dataset$Wage)) + geom_boxplot(color = "red") + theme_minimal()
+ggplot(dataset, aes(y = dataset$Value)) + geom_boxplot(color = "blue") + theme_minimal()
+ggplot(dataset, aes(y = dataset$Release.Clause)) + geom_boxplot(color = "magenta") + theme_minimal()
+ggplot(dataset, aes(y = dataset$Overall)) + geom_boxplot(color = "purple") + theme_minimal()
+ggplot(dataset, aes(y = dataset$Height)) + geom_boxplot(color = "orange") + theme_minimal()
+ggplot(dataset, aes(y = dataset$Weight)) + geom_boxplot(color = "cyan") + theme_minimal()
+
+```
+
+After considering different possibilities, I think the best option is leave the outliers  because all of them makes sense and do not contribute noise to the data set. The reason of all this amount of outliers is because the best players in the video game have a value, wage, etc... quite higher than the mean footballer in FIFA 23.
+It is not surprising to see it because that players are quite famous so they move a lot of money around them. However, almost any not top footballer have a wage, value and release clause quite small compared to the elite, which is conformed by just a few, that is why they are the outliers.
+
+We finally obtained the following data set after the whole pre-processing
+```{r}
+View(dataset)
+summary(dataset)
+str(dataset)
+```
+
+# Visualization Tools
+
+## Univariable
+
+First of all, we will graph some of the variables individually
+
+```{r}
+ggplot(dataset, aes(dataset$Real.Face)) + geom_bar(color = "deeppink", fill = "chocolate") + labs(title = "Real face of players",
+                                                            x = "Real Face", y = "Frequency") + theme_bw()
+
+ggplot(dataset, aes(dataset$Overall)) + geom_histogram(color = "chartreuse 3", fill = "chartreuse", binwidth = 3) +
+  labs(x = "Overall (Points out of 100)", y = "Frequency") + theme_grey()
+
+ggplot(dataset, aes(dataset$Value)) + 
+  geom_dotplot(color = "darkgoldenrod1", fill = "darkgoldenrod1", binwidth = 105000) +
+  labs(x = "Value (€)", y = "Frequency") + theme_grey() +
+  scale_x_continuous()
+
+ggplot(dataset, aes(dataset$Age)) + 
+  geom_histogram(color = "darkorchid1", fill = "turquoise", binwidth = 1) +
+  labs(x = "Age (Years)", y = "Frequency") + theme_light() + scale_x_continuous()
+```
+
+## Bivariable
+
+Lets now explore our data relations and see graphically their relation between the variables.
+
+Firstly, let's see the relation between the Overall and the Wage 
+
+```{r}
+ggplot(dataset, aes(dataset$Overall, dataset$Wage)) + geom_smooth(method = "gam",
+                                                                  formula = y ~ s(x, bs = "cs"))+
+  geom_line(alpha = 0.5) + theme_light() + labs(title= "Wage - Overall", 
+                                                x = "Overall (Points out of 100)", y = "Wage (€)")
+```
+
+As it can seen, the shape is similar to an exponential function, where, when the overall of the player increases, the wage also increases exponentially, this is normal because a player will ask for a bigger wage as its overall score increases.
+
+Also we can compare between the international reputation of a player and his value in the market, because we can suppose that a player will have a bigger value depending in variables such as value, or in this case, his international reputation
+
+```{r}
+ggplot(dataset, aes(y = as.factor(dataset$International.Reputation), x = dataset$Value)) + geom_boxplot(color = "blue", fill = "cyan", alpha = 0.2) +
+  theme_get() + labs(title = "International Reputation - Value", 
+                     y = "International reputation (Points out of 5)", x = "Value (€)")
+```
+
+Furthermore, we can compare the age of a player and his potential, because we could think that the young and rookie players have a bigger potential than the veterans
+
+```{r}
+ggplot(dataset, aes(dataset$Age, dataset$Potential)) + geom_col(color = "cyan", alpha = 0.5, linetype = 1) +
+  theme_minimal() + labs(y = "Potential (Points out of 10)", 
+                         x = "Age (Years)", title = "Potential - Age") + scale_alpha()
+```
+
+As we supposed, when the footballers are older, their potential to improve decreases fast. Also is important to mention that the young footballers (younger than 20 years) do not have a good potential, this is justified because the potential is the maximum overall a player can reach in the video game is by training, young players are not physically developed yet to reach a good overall, that is why players that are older than 20 but younger than 27 approximately have the biggest potential, that make sense because in that age a human is able to be in their peak in terms of physical activity.
+
+Also we can explore if depending in if the game scanned the footballer face or not  could depend on the overall variable (or viceversa).We could think it is because if that player  is so good or famous that lot of people would like to play with him and then,  FIFA 23 included his real face in the game for marketing reasons. By common sense, the best players are more likely to have their real faces included in the video game rather than the average players, because more users wants to play with them and feel it realistic.
+
+```{r}
+ggplot(dataset, aes(dataset$Real.Face, dataset$Overall)) + geom_boxplot(color = "purple", 
+                                                                        fill = "lightblue", alpha = 0.5) + 
+  geom_violin(alpha = 0.01) + theme_light() + labs(title = "Overall - Real.Face", 
+                                                   x = "Real Face included",
+                                                   y = "Overall (Points out of 100)")
+```
+
+After plotting the box plot and the violin plot, we can see that is quite likely  that if the footballer have a high overall score, his face will probably be included in the video game. It can be also justified in other the opposite way, if FIFA includes the face of a footballer, he will want to announce that characteristic of their video game, so probably that player will have a better overall compared to a similar player that do not have the face scanned.
+
+Also we can study if the preferred foot of the players can have an impact on their overall.
+
+```{r}
+ggplot(dataset, aes(dataset$Preferred.Foot, dataset$Overall)) + geom_boxplot(
+  color = "orange", fill = "yellow", alpha = 0.3
+)+ labs(title = "Preferred foot - Overall", x = "Prefered foot", y = "Overall (Points out of 100)")
+```
+
+We can see that the comparison is almost the same, so visually we could not say there is a difference between the overall of left and right foot players.
+
+It could be interesting to compare between the work rate and the value of the players, in order to know to what extend this variable has an impact on the players value.
+
+```{r}
+ggplot(dataset, aes(dataset$Work.Rate, dataset$Value)) + geom_point(color = "lightpink") + coord_flip() +
+  labs(title = "Value - Work Rate (Flipped)", y = "Value (€)", x = "Work Rate") +
+  theme_minimal()
+```
+
+We can notice there are some differences especially with the players with the low work rate.
+
+Another interesting graph could be the compassion between the weak foot quality of the footballers and their skill moves, because for lot of footballers it is essential to be good with their both feet in order to dribble the rivals.
+
+```{r}
+ggplot(dataset, aes(dataset$Skill.Moves, dataset$Weak.Foot)) + geom_count(color = "darkslategray3") +
+  labs(title = "Weak Foot - Skill Moves", x = "Skill Moves (Points out of 5)",
+       y = "Weak Foot (Points out of 5)") + theme_light()
+```
+
+We can notice there is a compensated balance between the skill moves and the weak foot of the players.
+
+It is also interesting to see if the players that are tall maybe have a worst skill move compared to the smallest players, that may have more control at the ball and be able to dribble better
+
+```{r}
+ggplot(dataset, aes(as.factor(dataset$Skill.Moves), dataset$Height)) + 
+  geom_violin() + geom_boxplot() + labs(title = "Height - Skill Moves (Flipped)",
+                                        x= "Skill moves (Points out of 5)", 
+                                        y = "Height (cm)")
+```
+
+It is true that the footballers with the best skill moves are quite smaller that are around 177 cm compared to the players with the worst skill moves that tends the 190 cm.
+
+Also, despite there are too much countries to have a visual result, I was quite interested in knowing if the nationality could have an impact on the international reputation of the players.
+
+```{r}
+ggplot(dataset, aes(dataset$Nationality, dataset$International.Reputation)) + geom_count(color = "brown") +
+  labs(title = "Nationality - International Reputation", x = "Nationality",
+       y = "International Reputation") + theme_minimal() + coord_flip() + 
+  theme(legend.position = "none") + scale_x_discrete()
+```
+
+After analyzing the result, there is plenty of evidence that it could really have an impact that depending on the country a footballer could have a  higher or lower international reputation. (Furthermore, with the current political situation, it makes sense)
+
+We can also compare the player's release clause and his value in the market in order to see if this both variables increases at the same time equally
+
+```{r}
+ggplot(dataset, aes(dataset$Value, dataset$Release.Clause)) + geom_point() + 
+  geom_smooth(color = "red", method = "gam", formula = y ~ x) + theme_minimal()
+```
+
+As we can see, there is a strong positive relation ship between this two variables, it looks like they are directly proportional.
+
+Thanks to this graphical analysis, we found the distribution of different variables of different classes (factor, numerical...) and also the relationship between different variables.
+
+
+# Principal Component Analysis ----------------------------------------------------------
+
+```{r}
+library(factoextra)
+library(GGally)
+
+glimpse(dataset)
+dim(dataset)
+```
+
+I create a equal data set to the original data set in order to delete the non-numeric variables
+and I will also save those removed columns in new variables.
+
+```{r}
+fifa <- dataset
+
+name = dataset[,1]
+nationality = dataset[,3]
+preferred.foot = dataset[,9]
+work.rate = dataset[, 13]
+real.face = dataset[,14]
+club = dataset[,6]
+# Height is not an important variables that makes a footballer better
+height = dataset[,15]
+
+# Now I will remove the non-numeric variables from the new data set and the useless numeric variables
+fifa$Name = NULL
+fifa$Nationality = NULL 
+fifa$Preferred.Foot = NULL
+fifa$Work.Rate = NULL
+fifa$Real.Face = NULL
+fifa$Club = NULL
+
+# I am going to take height  out of the PCA because I consider it is
+# not important. 
+# However, weight I will consider it an important variable
+# to understand if a player is better or not (because weight can be
+# associated with strength, that is an advantage for a player in the field)
+fifa$Height = NULL
+
+```
+
+Now we scale our modified data set
+```{r}
+fifa = scale(fifa) # We will use this variable for the following unsupervised learning tools
+```
+
+A quick analysis of this new data set
+```{r}
+dim(fifa)
+summary(fifa)
+str(fifa)
+```
+
+Firstly, lets compute the correlation and the ggcor
+
+```{r}
+R = cor(fifa)
+ggcorr(fifa, label = T)
+```
+
+Now we will compute the pca variable which we will use in order to apply this unsupervised learning tool
+
+```{r}
+pca = prcomp(fifa, scale=T)
+summary(pca)
+eigen(R)
+```
+
+```{r}
+screeplot(pca,main="Screeplot",col="turquoise",type="barplot",pch=19)
+# However we can use the following function that it is more understandable
+fviz_screeplot(pca, addlabels = TRUE)
+```
+Note that with 2 components we explain 59% of variability
+
+Lets have a visual representation
+```{r}
+barplot(pca$rotation[,1], las=2, col="darkblue")
+sum(pca$rotation[,1]^2) # = 1
+```
+
+We can see the contribution of each variable to the dimension 1
+```{r}
+fviz_contrib(pca, choice = "var", axes = 1)
+```
+
+Now we are able to estimate different things, such as:
+```{r}
+# The worst footballers in FIFA 23
+name[order(pca$x[,1])][(length(name)-5):length(name)]
+```
+
+```{r}
+# The best football players in FIFA 23
+name[order(pca$x[,1])][1:10]
+```
+
+For the second component
+```{r}
+barplot(pca$rotation[,2], las=2, col="darkblue")
+```
+
+We can rank the players by this component, lets see:
+```{r}
+name[order(pca$x[,2])][1:6]
+# Another equivalent way:
+name[order(pca$x[,2])][(length(name)-5):length(name)]
+```
+
+Contribution of each variable to dimension 2
+```{r}
+fviz_contrib(pca, choice = "var", axes = 2)
+```
+
+```{r}
+head(get_pca_ind(pca)$contrib[,1])
+
+head((pca$x[,1]^2)/(pca$sdev[1]^2))/dim(fifa)[1]
+```
+
+Lets visualize the top 50 players contributions to the first component:
+```{r}
+fviz_contrib(pca, choice = "ind", axes = 1, top=50)
+```
+
+Lets see what are the first names of this top 50 players
+```{r}
+name[order(get_pca_ind(pca)$contrib[,1],decreasing=T)][1:10]
+```
+
+It is exactly the same as name[order(pca$x[,1])][1:10]
+
+Now, we can try to the contribution of each player to Dim-1
+
+```{r}
+name_z1 = name[order(get_pca_ind(pca)$contrib[,1],decreasing=T)]
+fviz_contrib(pca, choice = "ind", axes = 1, top=15)+scale_x_discrete(labels=name_z1)
+```
+
+Biplot: variables and observations in the same graph (using first 2 components)
+
+```{r}
+# We plot it by using the biplot() function
+biplot(pca)
+```
+
+But we obtain too much information, it cannot be understandable
+
+We will use contributions instead of loadings to make it easier:
+
+```{r}
+fviz_pca_var(pca, col.var = "contrib")
+```
+
+We can try to improve it even more
+
+```{r}
+fviz_pca_biplot(pca, repel = TRUE)
+
+```
+
+## Scores (PCA)
+
+Lets plot the first two scores, using colors for height
+
+```{r}
+data.frame(z1=-pca$x[,1],z2=pca$x[,2]) %>% 
+  ggplot(aes(z1,z2,label=name,color=height)) + geom_point(size=0) +
+  labs(title="PCA", x="PC1", y="PC2") +
+  theme_bw() + scale_color_gradient(low="lightblue", high="darkblue")+theme(legend.position="bottom") + geom_text(size=2, hjust=0.6, vjust=0, check_overlap = TRUE)
+```
+
+It can be saw a slightly negative correlation between PC2 and height (height is smaller/light when PC2 is higher)
+
+Now lets try it by using colors for overall
+```{r}
+data.frame(z1=-pca$x[,1],z2=pca$x[,2]) %>% 
+  ggplot(aes(z1,z2,label=name,color= dataset$Overall)) + geom_point(size=0) +
+  labs(title="PCA", x="PC1", y="PC2") +
+  theme_bw() + scale_color_gradient(low="yellow", high="darkred")+theme(legend.position="bottom") + geom_text(size=2, hjust=0.6, vjust=0, check_overlap = TRUE)
+```
+
+The first component is highly correlated with the variable Overall, it makes sense because we used the variable overall for the PCA
+
+Which are the countries with the best footballers taking into account all the players that could play in their country football team?
+```{r}
+data.frame(z1=-pca$x[,1], nationality= nationality) %>% group_by(nationality) %>% summarise(mean=mean(z1)) %>% arrange(desc(mean))
+```
+
+It is important to mention that because Mozambique or Central African Republic has very few players compared to other nations such as Brazil, the balance between the good and bad players benefits countries with very few footballers in FIFA 23, that is why those countries are the first ones, specially if there is a good player among the players of a country with few of them, in the case of Mozambique Reinildo or Central African Republic Kondogbia (both are players of Atletico de Madrid, one of the best clubs of football in Spain)
+
+
+```{r}
+data.frame(z1=-pca$x[,1], club = club) %>% group_by(club) %>% summarise(mean=mean(z1)) %>% arrange(desc(mean))
+```
+
+Are the best players having the biggest value in the market and having the best wages?
+
+```{r}
+data.frame(z1=-pca$x[,1],z2=dataset$Wage) %>% 
+  ggplot(aes(z1,z2,label=name,color=dataset$Value)) + geom_point(size=0) +
+  labs(x="PC1", y="Wages") +
+  scale_color_gradient(low="lightblue", high="darkblue") +
+  theme_bw() + theme(legend.position="bottom") + geom_text(size=2, hjust=0.6, vjust=0, check_overlap = TRUE)
+```
+
+We can see that effectively, PC1 have a strong correlation with wages and also, both variables are correlated with the variable Value, as we can see that one of them increases, the others also increases.
+
+Are the players better with their skill moves when they are smaller rather than taller?
+```{r}
+data.frame(z1=-pca$x[,1],z2=height) %>% 
+  ggplot(aes(z1,z2,label=name,color=dataset$Skill.Moves)) + geom_point(size=0) +
+  labs(x="PC1", y="Height(cm)") +
+  scale_color_gradient(low="yellow", high="darkred") +
+  theme_bw() + theme(legend.position="bottom") + geom_text(size=2, hjust=0.6, vjust=0, check_overlap = TRUE)
+```
+
+We can see that the tallest players have worst skill moves compared to smaller players, we can see a correlation between PC1 and skill moves, and and inverse correlation between height and skill moves. There is not a clear correlation between PC1 and Height.
+
+The value of the best players depend on their age?
+```{r}
+data.frame(z1=-pca$x[,1],z2=dataset$Value) %>% 
+  ggplot(aes(z1,z2,label=name,color=dataset$Age)) + geom_point(size=0) +
+  labs(x="PC1", y="Value (€))") +
+  scale_color_gradient(low="green", high="magenta") +
+  theme_bw() + theme(legend.position="bottom") + geom_text(size=2, hjust=0.6, vjust=0, check_overlap = TRUE)
+```
+There is a strong relation between the age and the value of the player, where this relation is inversely proportional, that means that when a player is younger, his value is higher, we can see that because the players with in the same PC1, the youngest (green) are above compared to the older players (purple).
+Also we can see that PC1 and the value is directly proportional (approximately), when one of them increases, the other one also increases.It is like the players are the same PC1 value, the youngest players are above the oldest players.
+
+
+## Conclusions and insights from the output of the tool (PCA)
+
+After using this unsupervised learning tool, I noticed how important is the role that the different variables plays in order to understand and predict. By using different functions such as ggcorr() I could see visually the correlation between the different variables that I choose. It is important to mention that at the beginning, I also choose the variable height, but thanks to this function I noticed the correlation with the other ones was null, so I decided to remove it. 
+Also I saw the contribution to the different dimensions of each variable, where, in my case, value, wage, Release Clause and Overall were the most that contributed to the Dim-1. However, for Dim-2, weight were the variable that most contributed to this dimension.
+Furthermore I could plot the best and worst players in FIFA 23 and also I plotted some scores quite interesting in order to understand deeply my data.
+
+
+# Factor Analysis
+
+```{r}
+library(VIM)
+library(Quandl)
+library(lubridate)
+library(quantmod)
+```
+
+We create an auxiliar variable that is equal to our original dataset in order to modify it later
+
+```{r}
+X = dataset
+
+# We delete the non-numerical variables from X
+X$Name = NULL
+X$Nationality = NULL 
+X$Preferred.Foot = NULL
+X$Work.Rate = NULL
+X$Real.Face = NULL
+X$Club = NULL
+
+X = scale(X)
+
+summary(X)
+```
+
+We will use the function factanal() for the MLE.
+
+Now, lets fit a 3-factor model with no rotation
+
+```{r}
+x.f <- factanal(X, factors = 3, rotation="none", scores="regression")
+x.f
+
+cbind(x.f$loadings, x.f$uniquenesses)
+```
+
+Now lets plot some graphs in order to have a visual interpretation
+
+```{r}
+par(mfrow=c(3,1))
+barplot(x.f$loadings[,1], names=F, las=2, col="darkblue", ylim = c(-1, 1))
+barplot(x.f$loadings[,2], names=F, las=2, col="darkblue", ylim = c(-1, 1))
+barplot(x.f$loadings[,3], las=2, col="darkblue", ylim = c(-1, 1))
+```
+
+Lets do the same process but for 2 factors, Barlett estimation for scores and rotation varimax
+
+```{r}
+x.f <- factanal(X, factors = 2, rotation="varimax", scores="Bartlett", lower = 0.01)
+x.f
+
+cbind(x.f$loadings, x.f$uniquenesses)
+```
+
+Again, we should interpret visually the information obtained.
+```{r}
+par(mfrow=c(2,1))
+barplot(x.f$loadings[,1], names=F, las=2, col="darkblue", ylim = c(-1, 1))
+barplot(x.f$loadings[,2], las=2, col="darkblue", ylim = c(-1, 1))
+```
+
+## Scores (FA)
+
+I am going to use a 2-factor model for the scores
+
+Lets try to plot a 2-factor model with the potential variable
+```{r}
+potential = dataset[,5]
+
+factor.df = data.frame(potential = potential, x.f$scores) %>% gather("factor", "score", -potential)
+```
+
+```{r}
+factor.df %>%
+  ggplot(aes(x=potential,y=score)) + geom_line(size=1) + 
+  scale_x_continuous() +
+  theme_bw() + theme(legend.position="bottom") + scale_color_brewer(palette="Dark2") +
+  facet_wrap(~factor, ncol=1) +
+  labs(title="2-factor model", x="Potential", y="scores", col="")
+```
+We can see that for the factor 1, the scores do not increase until it reaches a potential of 75, where it increases quite fast. Meanwhile, for the factor 2, it starts increasing continuously but at 92 approximately it starts decreasing.
+
+Lets do the same but now for the value variable, just to see different approaches and how this unsupervised learning tool works.
+```{r}
+value = dataset[,7]
+factor.df = data.frame(value = value, x.f$scores) %>% gather("factor", "score", -value)
+
+factor.df %>%
+  ggplot(aes(x=value,y=score)) + geom_line(size=1) + 
+  scale_x_continuous() +
+  theme_bw() + theme(legend.position="bottom") + scale_color_brewer(palette="Dark2") +
+  facet_wrap(~factor, ncol=1) +
+  labs(title="2-factor model", x="Value", y="scores", col="")
+```
+In this case, by using the variable value, the score increasing proportionally directed with the Value variable in the factor 1, but for the second variables, it decreases continuously.
+
+## Conclusions and insights from the output of the tool (FACTOR ANALYSIS)
+
+Using the Factor Analysis tool we could use an unsupervised learning tool where factors where essential, in where we could plot graphically depending on the number of factors, I decided to try with this tool using different variables such as the potential or the value just to see the output and how this tool works, in order to understand this unsupervised learning tool better.
+It is a different approach compared to the other unsupervised learning tools but efficient.
+We saw the impact on the different variables on each factor (wheter positive or negative) and varying the amount of factors. By the scores we were able to have a visual interpretation of this tool.
+
+
+# Clustering Tools
+
+**IMPORTANT:** 
+For the clustering tools, my objective was to use all of them in order to make the best effort and work as possible, however, due to the limitations of my PC and in order to adapt it to the format .html, some of the clustering are written as comments. In the case there are ## (a comment in bold letter), it means that it was executed in my PC but individually and also enlarging the memory limit (by using the code memory.limit(size = 56000), and it is thought to be executed and included in the .html and .rmd as code.
+If there is only # (a normal comment), it means that my PC could not execute that piece of code at all, so it is only written just to show how the code would be but not thought to be executed.
+It is frustrating to try to fulfill in the best way your work and due to limitations or factors that does not depend on yourself, you must affect your work indirectly.
+
+
+```{r}
+library(cluster)
+library(mclust)
+```
+
+```{r}
+fifa = dataset
+
+# Lets save in a new variable the variables that I will remove later
+name = dataset[,1]
+nationality = dataset[,3]
+preferred.foot = dataset[,9]
+work.rate = dataset[, 13]
+real.face = dataset[,14]
+club = dataset[,6]
+height = dataset[,15]
+
+# As before, lets remove the non-numerical variables or the numerical variables
+# without an impact in the output (such as Height)
+
+fifa$Name = NULL
+fifa$Nationality = NULL 
+fifa$Preferred.Foot = NULL
+fifa$Work.Rate = NULL
+fifa$Real.Face = NULL
+fifa$Club = NULL
+fifa$Height = NULL
+
+fifa = scale(fifa)
+```
+
+PCA
+```{r}
+pca = prcomp(fifa, scale=T)
+```
+
+Lets plot the data
+```{r}
+data.frame(z1=-pca$x[,1],z2=pca$x[,2]) %>% 
+  ggplot(aes(z1,z2,label=name)) + geom_point(size=0) +
+  labs(title="PCA", x="PC1", y="PC2") +
+  theme_bw() +theme(legend.position="bottom") + geom_text(size=2, hjust=0.6, vjust=0, check_overlap = TRUE)
+```
+
+We will use this plot in order to create the clusters and will be our main reference. The clusters will be separated by colors.
+
+```{r}
+X = scale(fifa) # fifa is already scaled before
+```
+
+Let's start using 5 clusters and later I will reduce it in order to have the optimal number of clusters
+```{r}
+fit = kmeans(X, centers=5, nstart=100)
+groups = fit$cluster
+# groups 
+```
+
+Let's see if the groups are balanced or not
+```{r}
+barplot(table(groups), col="blue")
+```
+
+We can see they are clearly unbalanced
+
+Meaning of the centers
+```{r}
+centers=fit$centers
+centers
+```
+
+```{r}
+i=1  # plotting the centers in cluster 1
+bar1=barplot(centers[i,], las=2, col="darkblue", ylim=c(-2,2), main=paste("Cluster", 
+                                                                          i,": Group center in blue, global center in red"))
+points(bar1,y=apply(X, 2, quantile, 0.50),col="red",pch=19)
+```
+
+The red points represent the center of all footballers in FIFA23, meanwhile the blue bars represent the center of a group
+
+Now we are going to represent the Clusplot
+```{r}
+fviz_cluster(fit, data = X, geom = c("point"),ellipse.type = 'norm', pointsize=1)+
+  theme_minimal()+geom_text(label=name,hjust=0, vjust=0,size=2,check_overlap = T)+scale_fill_brewer(palette="Paired")
+```
+
+We can see there are some clusters that overlaps between them, but we can identify clearly different clusters
+
+The Silhouette value in the interval [-1,1] measures the cohesion of the data point to its respective clusters relative to the other ones.
+
+Silhouette plots depends on the distance metric and suggest that the data fits its own cluster correctly.
+
+```{r}
+d = dist(X, method="euclidean")  
+sil = silhouette(groups, d)
+plot(sil, col=1:5, main="", border=NA) 
+```
+
+As we can see, the groups are unbalanced, it returns a similar result compared to what we obtain with "barplot(table(groups), col="blue")", but with a different representation, and again the groups are quite unbalanced
+
+Now we can try with other number of clusters just to see how the data is splitted I decided to use 2 centers to be able to understand and see the data when plotted easily.
+
+```{r}
+fit = kmeans(X, centers=2, nstart=100)
+groups = fit$cluster
+# groups
+```
+
+```{r}
+barplot(table(groups), col="blue")
+```
+
+Again we can see both groups are quite unbalanced
+
+```{r}
+centers=fit$centers
+```
+
+Plotting the centers in the first cluster
+
+```{r}
+i <- 1
+bar1=barplot(centers[i,], las=2, col="darkblue", ylim=c(-2,2), main=paste("Cluster", 
+                                                                          i,": Group center in blue, global center in red"))
+points(bar1,y=apply(X, 2, quantile, 0.50),col="red",pch=19)
+```
+
+Plotting the centers in the second cluster
+```{r}
+i <- 2  
+bar2=barplot(centers[i,], las=2, col="darkblue", ylim=c(-2,2), main=paste("Cluster", i,": Group center in blue, global center in red"))
+points(bar2,y=apply(X, 2, quantile, 0.50),col="red",pch=19)
+```
+
+Lets do the clusplot
+
+```{r}
+fviz_cluster(fit, data = X, geom = c("point"),ellipse.type = 'norm', pointsize=1)+
+  theme_minimal()+geom_text(label=name,hjust=0, vjust=0,size=2,check_overlap = T)+
+  scale_fill_brewer(palette="Paired")
+```
+
+We can see that it is much more easier to understand the data that each cluster contains. Also, in the cluster 1 there are the worst players and in cluster 2 the best players, despite they overlap. However, I consider this clustering is too simple, it would be better if we add some more clusters.
+
+If we do the Silhouette plot (just to see it from a different approach the distribution of the clusters)
+
+```{r}
+d <- dist(X, method="euclidean")  
+sil = silhouette(groups,d)
+plot(sil, col=1:2, main="", border=NA) 
+
+# Summary
+summary(sil)
+```
+
+Again we can see the clusters are unbalanced in terms of amount of data
+
+We can try to see the optimal clusters by different ways.
+
+However, I was not able to execute the following functions so I decided to add them a # just to show how should be the code, but my PC cannot run it so I will estimate the clusters just by common sense.
+```{r}
+# Based on wss (total within sum of square)
+#fviz_nbclust(X, kmeans, method = 'wss')
+# Based on Silhouette
+#fviz_nbclust(X, kmeans, method = 'silhouette')
+# Based on the gap statistic (using bootstrap)
+#fviz_nbclust(X, kmeans, method = 'gap_stat', k.max = 20)
+```
+
+**NOTE:** My PC cannot run those functions to know the optimal number of clusters, however, I did some proves to know which number of clusters grouped my data in the best way, I already proved for 2 and 5 clusters. I will try 3 and 4 clusters to decide which is the most optimal number of clusters, however, it will depend on my criteria.
+
+Clusters = 3
+```{r}
+fit = kmeans(X, centers=3, nstart=100)
+groups = fit$cluster
+barplot(table(groups), col="blue")
+fviz_cluster(fit, data = X, geom = c("point"),ellipse.type = 'norm', pointsize=1)+
+  theme_minimal()+geom_text(label=name,hjust=0, vjust=0,size=2,check_overlap = T)+
+  scale_fill_brewer(palette="Paired")
+```
+
+Clusters = 4
+```{r}
+fit = kmeans(X, centers=4, nstart=100)
+groups = fit$cluster
+barplot(table(groups), col="blue")
+fviz_cluster(fit, data = X, geom = c("point"),ellipse.type = 'norm', pointsize=1)+
+  theme_minimal()+geom_text(label=name,hjust=0, vjust=0,size=2,check_overlap = T)+
+  scale_fill_brewer(palette="Paired")
+```
+
+Finally, I decided to use 3 clusters because I consider it separates the data in the most logical and efficient way, avoiding big overlaps between the clusters (like in clusters = 4).
+Furthermore, later when I plot the clusplot, the clusters will group players in  a way that makes sense (TOP professional footballers, average professional footballers and worst professional footballers). It is also important to mention that I consider that using that number of clusters it balances the ammount of data in each cluster when using the function barplot(table(groups), col="blue")
+
+## Profile variables
+
+In order to understand better the clusters, by using the variables not included in the clustering.
+
+Now, lets use 3 centers as we said before
+```{r}
+fit = kmeans(X, centers=3, nstart=100)
+groups = fit$cluster
+
+barplot(table(groups), col="blue")
+```
+
+```{r}
+# Lets try by using the height as the profile variable
+as.data.frame(X) %>% mutate(cluster=factor(groups), name=name, height=height) %>%
+  ggplot(aes(x = cluster, y = height)) + 
+  geom_boxplot(fill="lightblue") +
+  labs(title = "Height by cluster", x = "", y = "", col = "")
+```
+
+We can see that almost all the clusters have the same values in height, the group 1 (at least in my case) have slightly taller players, also this cluster contains the best players (the most at the left at the clusplot), so maybe there is some correlation between the height and how good is a footballer in FIFA23.
+
+
+Lets analyze visually the cluster plot with 3 clusters
+```{r}
+fviz_cluster(fit, data = X, geom = c("point"),ellipse.type = 'norm', pointsize=1)+
+  theme_minimal()+geom_text(label=name,hjust=0, vjust=0,size=2,check_overlap = T)+scale_fill_brewer(palette="Paired")
+```
+
+We can see clearly that if we divide the data set in 3 clusters, we obtain  that the clusters divides the players in 3 clear categories.
+The elite players, such as Pedri, Kevin De Bruyne or Messi, which are the best footballers currently (which are at the left part of the clusplot).
+The second cluster that contains the players  that are not the best ones but are still playing in the most important leagues on the world, such as Pablo Torre or Fofana (in the middle part of the clusplot). And finally, the third cluster that contains the worst players, which plays  for inferior leagues or smaller clubs, an example could be Ogawa (at the most right part of the clusplot).
+
+
+## Kmeans with Mahalanobis distance
+
+```{r}
+S_x <- cov(fifa)
+iS <- solve(S_x)
+e <- eigen(iS)
+V <- e$vectors
+B <- V %*% diag(sqrt(e$values)) %*% t(V)
+Xtil <- scale(fifa,scale = FALSE)
+fifaS <- Xtil %*% B
+
+fit.mahalanobis = kmeans(fifaS, centers=3, nstart=100)
+groups = fit.mahalanobis$cluster
+centers=fit.mahalanobis$centers
+colnames(centers)=colnames(X)
+centers
+
+barplot(table(groups), col="blue")
+```
+
+Plotting the centers in the first cluster
+```{r}
+i <- 1  
+bar1=barplot(centers[i,], las=2, col="darkblue", ylim=c(-2,2), main=paste("Cluster", i,": Group center in blue, global center in red"))
+points(bar1,y=apply(X, 2, quantile, 0.50),col="red",pch=19)
+```
+
+Plotting the centers in the second cluster
+```{r}
+i <- 2  
+bar2=barplot(centers[i,], las=2, col="darkblue", ylim=c(-2,2), main=paste("Cluster", i,": Group center in blue, global center in red"))
+points(bar2,y=apply(X, 2, quantile, 0.50),col="red",pch=19)
+```
+
+Plotting the centers in the third cluster
+```{r}
+i <- 3  
+bar3=barplot(centers[i,], las=2, col="darkblue", ylim=c(-2,2), main=paste("Cluster", i,": Group center in blue, global center in red"))
+points(bar3,y=apply(X, 2, quantile, 0.50),col="red",pch=19)
+```
+
+ 
+Now we can plot the clustering again by using the Mahalanobis
+```{r}
+fviz_cluster(fit.mahalanobis, data = X, geom = c("point"),ellipse.type = 'norm', pointsize=1)+
+  theme_minimal()+geom_text(label=name,hjust=0, vjust=0,size=2,check_overlap = T)+scale_fill_brewer(palette="Paired")
+```
+
+Again, we obtain  similar plot, where there are 3 centers in which divides in groups vertically, probably diving between the best, medium and worst players.
+
+Now we can compare the fit cluster with the fit.mahalanobis cluster model and see to what extend they look alike. 
+
+```{r}
+adjustedRandIndex(fit$cluster, fit.mahalanobis$cluster) # 0.3277612
+```
+
+Because I obtained 0.3277612 we can say that there is a weak relation between
+# our models, so we could not say there is a clear correlation between them.
+
+Another possible representation using the kmeans technique for clustering
+
+**NOTE:** I needed to do not execute the following line of code because my PC was not able to run it in order to convert it to the format .html, however, the code is written in order to be execute it and can be ran individually (that is why is with ##)
+```{r}
+##fit.kmeans <- eclust(X, "kmeans", stand=TRUE, k=3)
+```
+As we can see (if the code was executed) that the result is quite similar to the previous one results. Where the data is divided in vertical clusters where we can see like the groups are slices grouping the different footballers.
+
+We apply again the silhouette plot to see the distribution of the data in the different clusters
+```{r}
+d <- dist(scale(X), method="euclidean")  
+sil = silhouette(groups, d)
+plot(sil, col=1:3, main="", border=NA)
+```
+
+The clusters are unbalanced but at least the difference is not so big as before.
+
+If we compare between the kmeans clustering and the Mahalanobis we can notice that the clusters in the Mahalanobis technic are more balanced compared to the kmeans, so I would recommend more this method rather than the kmeans. I compared this two technics by using the barplot() function and I obtained similar results but the Mahalanobis was a little bit more balanced.
+
+## PAM clustering
+
+We represent the clusplot using the pam clustering method
+
+**NOTE:** As before, the code can be executed individually, but when using the Knit my PC did not have enough memory in order to plot it, that is why I used ##. So it is recommended to execute this code individually in order to visualize the output.
+
+```{r}
+##fit.pam <- eclust(X, "pam", stand=TRUE, k=2, graph=F)
+##fviz_cluster(fit.pam, data = X, geom = c("point"), pointsize=1)+ theme_minimal()+geom_text(label=name,hjust=0, vjust=0,size=2,check_overlap = T)+scale_fill_brewer(palette="Paired")
+```
+
+The output of this function and clustering is quite similar to the previous clustering methods used, we can see there is a high similarity between the different technics already used, so we can notice all this methods are working well and solves in different but equivalent ways the clustering of the data. 
+We can see it divides the data in 3 clusters, where we can difference this three groups into the best players, the medium and the worst players in FIFA 23.
+
+
+## Kernel k-means clustering
+
+**NOTE:** I could not run this clustering because it was too demanding for my PC. So I will add some # to the code just to show how it should be written the code, but I am not able to run it.
+
+```{r}
+#library(kernlab)
+#fit.ker <- kkmeans(as.matrix(X), centers=3, kernel="rbfdot") # Radial Basis kernel (Gaussian)
+#centers(fit.ker)
+#size(fit.ker)
+#withinss(fit.ker)
+```
+
+Now we can make the clusplot using the kernel k-means clustering
+```{r}
+#object.ker = list(data = X, cluster = fit.ker@.Data)
+#fviz_cluster(object.ker, geom = c("point"), ellipse=F,pointsize=1)+
+  #theme_minimal()+geom_text(label=name,hjust=0, vjust=0,size=2,check_overlap = #T)+scale_fill_brewer(palette="Paired")
+```
+
+
+
+## Hierarchical clustering
+
+**NOTE:** I could not execute this clustering in my PC (even execution individually the following lines of code), because there is a huge amount of data, so I do not recommend this type of clustering for data sets that involves a big amount of data. Furthermore, probably if this type of clustering could be plotted, it will be impossible to understand anything because the format that is represented.
+Anyways, I wrote with # the code that should be used in order to execute this type of clustering despite I did not used this type of clustering
+
+```{r}
+# d = dist(scale(X), method = "euclidean")
+# hc <- hclust(d, method = "ward.D2") 
+
+#hc$labels <- name
+
+#fviz_dend(x = hc, 
+          #k=3,
+          #palette = "jco", 
+          #rect = TRUE, rect_fill = TRUE, 
+          #rect_border = "jco")
+
+#fviz_dend(x = hc,
+          #k = 3,
+          #color_labels_by_k = TRUE,
+          #cex = 0.8,
+          #type = "phylogenic",
+          #repel = TRUE)+ theme(axis.text.x=element_blank(),axis.text.y=element_blank())
+```
+
+## EM clustering
+
+```{r}
+X = scale(fifa)
+res.Mclust <- Mclust(X)
+summary(res.Mclust)
+
+# The clustering is probabilistic
+head(res.Mclust$z)
+```
+
+The tool assign the group using the highest probability
+
+```{r}
+head(res.Mclust$classification)
+```
+
+We plot the optimal number of clusters
+```{r}
+fviz_mclust(object = res.Mclust, what = "BIC", pallete = "jco") +
+  scale_x_discrete(limits = c(1:10))
+```
+
+We obtain the optimal number of clusters.
+
+Now we should plot the clustering plot using the optimal number of clusters previously obtained
+```{r}
+fviz_mclust(object = res.Mclust, what = "classification", geom = "point",
+            pallete = "jco")
+```
+
+Again, we obtain a similar trend compared to the previous clustering technics, where the clusters are divided mostly from left to right.
+
+## Heatmaps clustering
+
+**NOTE:** This clustering also did not run in my PC, probably to the huge amount of data, so I will write it with # just to also have it in the different clustering technics. But I do not recommend it at all for large data sets. So it is not thought to be executed for my work.
+
+I consider this type of clustering is not focused on data sets similars to mine. However I will write the code in order to execute this clustering technic with #.
+```{r}
+#heatmap(scale(X), scale = "none",
+        #distfun = function(x)Conclusions and insights from the output of the tool{dist(x, method = "euclidean")},
+        # hclustfun = function(x){hclust(x, method = "ward.D2")},
+        #cexRow = 0.7)
+```
+
+## Conclusions and insights from the output of the tool (CLUSTERING)
+
+We can affirm that thanks to the clustering tool we have obtained a good separation of the data taking into account different numeric variables in order to determine the best players and classify them in clusters. Due to the resource demand in the functions in order to find the optimal number of clusters, I decided to choose the number of clusters by comparing between them which one had the least unbalanced groups and which groups the data in the most efficient way. Also we compared our models of fit and  fit.mahalanobis where we obtained a result of 0.3277612, which is a positive relation between them, however, it is quite low.
+Between all the methods applied I think the best one were the Mahalanobis method, in which despite we obtained groups quite unbalanced, was the best one grouping the data into equal sets, and also, it was not too demanding for the PC, that is another important point.
+It is important to mention that clustering is probably one of the most PC-resource demanding tools but at the same time one of the most effective tools, probably it is not intended for low quality computers.
+Also, by changing the value of the number of clusters and the different models I obtained similar results, where at the top left we find the best footballers, the cluster that is between the other two is a middle term, where there are good footballers, but for sure they are not the best players right now, and finally, the cluster at the most right were we can find  the worst footballers in FIFA 23 according to the studied variables. We obtained unbalanced clusters where the data were not equally distributed. 
+As I said before, I decided to choose 3 clusters rather than 2 or 4 because after comparing them, I considered this was the most optimal, balanced, PC-resource friendly and understandable way to classify the data. Comparing between the types of clustering, some of them my PC was not able to run it, so if I had to pick one I would choose the first method, which is probably the least demanding in terms of PC-resources and they represent almost the same. It is important to mention that most of the clustering methods returned clusplots highly similar, where all of them divides the data in 3 clear groups in most of the clusterings.
+However, we learned different technics about the clustering tool, which is a powerful tool in unsupervised. learning.
+
+
+
+
+# Final Conclusion
+
+Unsupervised learning tools are essential in order to group and relate data between them, there exist different unsupervised learning tools that I have applied previously, however, before applying those tools and their impact in prediction and statistical learning, we should start by the chose of the data set and cleaning it.
+
+As I explained before, I decided to chose the FIFA 23 data set because is a video game that I commonly play and also the data set contains different footballers that I admire in the real life, that is the main reason why I picked this data set. Furthermore, when I looked at it and see the variables, I noticed that there were a plenty of possibilities and diverse input and also because it was a huge data set (+17000 rows), also, I considered this data set very original in order to make a interesting work, trying to do not select data sets that already a lot of people had used before, in this way I could face new challenges, issues and try to solve them. 
+
+I consider I could answer to my initial questions about the differences between a good and a bad footballer in FIFA 23, as we had seen during the whole work, different characterestics and tools helped us in order to differentiate between the best players depending on their variables and the real impact of them when selecting the best and the worst players, for instance, variables such as the value, overall or the international reputation were important variables in order to determine to what extend that footballer is good or not, by using common sense, it makes sense that this type of characteristics have a bigger impact in order to determine if a football player is good or not rather than variables such as weight.
+
+Talking about the cleaning of the data set, firstly I decided to look at the NA values and treat with them, in my case I deleted the first NA and after modifying the data set, I decided to replace the NA values (for the release clause variable) with the mean, in this way I avoided to loose a lot of players (rows). I also wanted to convert the variables, that most of them were in character class,  to their real class (such as Value to numeric or preferred foot to factor),  most of the work were employed on modifying correctly the data set (for instance, for the value variable, I needed to separate cases in where there was a M or a K, in order to multiplied by the correct number), I used a lot the function substring() and nchar() to modify and convert correctly my data set without damaging the data.
+
+For the visualization, I studied uni variable and bi variable relations in order to understand deeply my data set and also, it is a good way to know if the unsupervised learning is working correctly or not (by using your common sense and the information obtained with the visualization tools)
+
+For the unsupervised learning tools, there were different that the professor taught us in class (such as PCA, FA or Clustering), PCA and FA were quite understandable and not demanding for the PC, where thanks to them I obtained results quite interesting. However, for the clustering tool, I had some issues when executing the code because my PC was not able to process so much data and produce the clusters, despite this fact, it is not surprising to have this type of problems when we are working with big data sets, where the PC must analyze a lot of rows in which each row have several variables and process all that information. That is the main reason why I did not apply some tools but I decided to write it in the code (using #) because I considered them important and it is always good to know different methods in order to apply clustering, which probably is the best, most interesting and eye-catching unsupervised  learning tool to learn and apply, but it is also quite demanding, especially for not good computers which is hard for them to process so much data and compute outputs. It would be interesting to apply supervised learning tools in order to see the output given by them and compare it with the unsupervised learning tools and determine which one is better.
+
+Finally, it is important to mention that because this data set contains a huge amount of footballers in a video game, it is not surprising to see that most of the footballers are quite equal (for example, when we see huge overlaps between them when clustering), because most footballers have similar characteristics and just a few can be differential at the field.
+
+
+
